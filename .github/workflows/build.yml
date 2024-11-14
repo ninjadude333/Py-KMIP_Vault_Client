@@ -41,7 +41,7 @@ jobs:
           pip install pyinstaller configparser pymip
 
       - name: Build Windows executable
-        run: pyinstaller --onefile rotate_kmip_key.py
+        run: pyinstaller --onefile kmipClient.py
 
       - name: Upload Windows executable artifact
         uses: actions/upload-artifact@v3
