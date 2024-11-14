@@ -15,4 +15,4 @@ COPY . .
 ENV CONFIG_FILE_PATH="/app/config.ini"
 
 # Define entrypoint to run the script with the configuration file
-ENTRYPOINT ["python", "rotate_kmip_key.py"]
+ENTRYPOINT ["python", "kmipClient.py"]
