@@ -47,4 +47,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: kmip_client_windows_exe
-          path: dist/rotate_kmip_key.exe
+          path: dist/kmipClient.exe
