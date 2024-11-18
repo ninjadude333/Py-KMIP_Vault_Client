@@ -424,3 +424,121 @@ MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCur7zz3/HFjYoz
     ```
 
 - Adjust key formats (e.g., PKCS1) if needed by changing the parameters in `.public_bytes` or `.private_bytes`.
+
+
+When saving a **symmetric key**, you can serialize it for better interoperability, readability, or future use cases, just as you do with public/private keys. Simply writing the raw binary data to a file works, but serialization provides additional benefits, such as ensuring the format adheres to cryptographic standards and is easier to validate or exchange across systems.
+
+Here’s how you can handle symmetric keys effectively:
+
+---
+
+### **Serialization for Symmetric Keys**
+#### **Why Serialize Symmetric Keys?**
+- **Readability**: Serialized keys can be Base64-encoded, making them easier to view and validate without risking corruption.
+- **Portability**: Serialized keys follow a specific format, making them easier to use across systems.
+- **Validation**: You can include metadata like the algorithm and key size for self-validation.
+
+#### **Serialize Symmetric Key to Base64**
+Here’s how to serialize the symmetric key into a PEM-like format:
+```python
+import base64
+
+def serialize_symmetric_key(key_bytes, algorithm="AES"):
+    """Serialize symmetric key to a Base64-encoded format."""
+    header = f"-----BEGIN {algorithm} KEY-----\n"
+    footer = f"\n-----END {algorithm} KEY-----"
+    # Encode the key in Base64 and wrap lines at 64 characters
+    key_b64 = base64.encodebytes(key_bytes).decode("utf-8")
+    key_wrapped = "\n".join(key_b64[i:i+64] for i in range(0, len(key_b64), 64))
+    return f"{header}{key_wrapped}{footer}"
+```
+
+#### **Write Serialized Key to File**
+```python
+def write_serialized_symmetric_key(key_bytes, filename):
+    """Serialize and write symmetric key to a file."""
+    try:
+        serialized_key = serialize_symmetric_key(key_bytes)
+        os.makedirs(output_dir, exist_ok=True)
+        file_path = os.path.join(output_dir, filename)
+        with open(file_path, "w") as key_file:
+            key_file.write(serialized_key)
+        print(f"Serialized symmetric key written to: {file_path}")
+    except Exception as e:
+        print(f"Failed to write serialized symmetric key to file {filename}: {e}")
+```
+
+---
+
+### **Validating a Symmetric Key**
+Validation ensures that the key conforms to expected properties like size and usage. Here’s how you can validate a symmetric key:
+
+#### **Validation Example**
+```python
+def validate_symmetric_key(key_bytes, expected_algorithm="AES", expected_length=256):
+    """Validate the properties of a symmetric key."""
+    if len(key_bytes) * 8 != expected_length:
+        raise ValueError(f"Invalid key length: Expected {expected_length} bits, got {len(key_bytes) * 8} bits")
+    print(f"Key is valid for {expected_algorithm} with length {expected_length} bits.")
+```
+
+#### **Usage in the Workflow**
+1. **Generate or Retrieve the Key**:
+   - Use your KMIP client to generate or retrieve the key as raw bytes.
+2. **Validate the Key**:
+   ```python
+   validate_symmetric_key(key_bytes, expected_algorithm="AES", expected_length=256)
+   ```
+3. **Serialize and Save**:
+   ```python
+   write_serialized_symmetric_key(key_bytes, "symmetric_key.pem")
+   ```
+
+---
+
+### **Complete Workflow Example**
+
+```python
+def handle_symmetric_key(key_id, client):
+    """Retrieve, validate, serialize, and write a symmetric key."""
+    try:
+        # Retrieve the key
+        key = client.get(key_id)
+        if hasattr(key, 'value'):
+            key_bytes = key.value
+        else:
+            raise ValueError(f"Key object does not contain raw value: {type(key)}")
+
+        # Validate the key
+        validate_symmetric_key(key_bytes, expected_algorithm="AES", expected_length=256)
+
+        # Serialize and save the key
+        write_serialized_symmetric_key(key_bytes, "symmetric_key.pem")
+
+        print("Symmetric key successfully processed.")
+    except Exception as e:
+        print(f"Error handling symmetric key: {e}")
+```
+
+---
+
+### **Example Output for Serialized Symmetric Key**
+
+The file `symmetric_key.pem` will look like:
+```plaintext
+-----BEGIN AES KEY-----
+U2FsdGVkX19GJzslLbNFwZkd02Tb8zRt3KcvVZ6FqI8=
+-----END AES KEY-----
+```
+
+---
+
+### **Advantages of This Approach**
+1. **Interoperability**:
+   - Base64-encoded PEM-like format is compatible with many systems and tools.
+2. **Validation**:
+   - Ensures the key meets your cryptographic expectations (e.g., algorithm and length).
+3. **Ease of Use**:
+   - Can be re-imported into the script for cryptographic operations.
+
+Let me know if you need help integrating this approach into your KMIP workflow!

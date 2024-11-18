@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Create directories for certificates, key output, logs, and config
-RUN mkdir -p /app/certs /app/output /app/logs
+RUN mkdir -p /app/certs /app/output /app/logs /app/config
 
 # Set working directory
 WORKDIR /app
@@ -14,7 +14,7 @@ WORKDIR /app
 # Copy the Python script, requirements file, and config file
 COPY requirements.txt /app/
 COPY ts-kmip-client.py /app/
-COPY config.ini /app/
+COPY config.ini /app/config/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -23,4 +23,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 VOLUME ["/app/certs", "/app/output", "/app/logs", "/app/config"]
 
 # Default command to run the Python script
-CMD ["python", "ts-kmip-client.py"]
+CMD ["python", "ts-kmip-client.py", "--config=/app/config/config.ini"]

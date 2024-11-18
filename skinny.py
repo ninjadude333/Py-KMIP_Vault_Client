@@ -61,6 +61,13 @@ def serialize_symmetric_key(key_bytes, algorithm="AES"):
     key_wrapped = "\n".join(key_b64[i:i+64] for i in range(0, len(key_b64), 64))
     return f"{header}{key_wrapped}{footer}"
 
+def validate_symmetric_key(key_bytes, expected_algorithm="AES", expected_length=256):
+    """Validate the properties of a symmetric key."""
+    if len(key_bytes) * 8 != expected_length:
+        raise ValueError(f"Invalid key length: Expected {expected_length} bits, got {len(key_bytes) * 8} bits")
+    logging.info(f"Key is valid for {expected_algorithm} with length {expected_length} bits.")
+
+
 def write_key_to_file(key_bytes, key_storage_path, key_filename, mode="wb"):
             """Write the key to a local file with optional renaming for old keys."""
             try:
@@ -148,11 +155,15 @@ def test_kmip_login():
         logging.info(f"Retrieving new key with ID: {new_key_id}...")
         new_key = client.get(new_key_id)
 
-        # Step 3: serialize key
+        # Step 3: Validate key
+        logging.info(f"Validating new key")
+        validate_symmetric_key(new_key.value, expected_algorithm="AES", expected_length=256)
+
+        # Step 4: serialize key
         logging.info(f"Serializing new key")
         serialized_key = serialize_symmetric_key(new_key.value)
 
-        # Step 4: Write the new key to a static file
+        # Step 5: Write the new key to a static file
         logging.info(f"Writing new key to static file: ...")
         write_key_to_file(serialized_key, '/app/output', 'app-key.key', mode="w")
         logging.info(f"Key rotation completed successfully at {datetime.now()}.")
