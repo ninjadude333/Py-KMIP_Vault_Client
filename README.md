@@ -1,219 +1,253 @@
-# KMIP Client with HashiCorp Vault Integration
+Here’s the updated `README.md` file including networking and other requirements for running the KMIP Key Management Client.
 
-This project provides a Dockerized Python client for interacting with a KMIP server, such as HashiCorp Vault's KMIP Secrets Engine. The client script (`rotate_kmip_key.py`) fetches KMIP keys, supports key rotation, and saves keys locally for use in services like database encryption.
+---
 
-## Project Structure
+# KMIP Key Management Client
 
-The directory structure for this project should look like this:
+This project provides a Python-based KMIP (Key Management Interoperability Protocol) client for managing cryptographic keys through a KMIP server such as HashiCorp Vault. It supports features like periodic key rotation, retention of old keys, static filenames for seamless integration, and log file rotation.
 
-```
-kmip_client/
-├── config.ini           # Configuration file with KMIP server details
-├── requirements.txt     # Python dependencies
-├── setup.py             # (optional) Python packaging file
-├── rotate_kmip_key.py   # Main Python script
-└── Dockerfile           # Docker build file
-```
+---
 
-### File Descriptions
-- **`config.ini`**: Configuration file specifying KMIP server details, output paths, and rotation settings.
-- **`requirements.txt`**: List of required Python packages.
-- **`setup.py`**: (Optional) Python setup file for specifying dependencies and Python version.
-- **`rotate_kmip_key.py`**: Main Python script that connects to the KMIP server, retrieves keys, rotates keys if necessary, and saves them locally.
-- **`Dockerfile`**: Dockerfile for creating a containerized environment to run the script.
+## Features
 
-## Configuration: `config.ini`
-Create a `config.ini` file in the project directory with the following content:
+- **Periodic Key Rotation**:
+  Automatically rotates keys at a configurable interval.
+- **Manual Key Creation**:
+  Supports on-demand key creation via a single run.
+- **Key Retention**:
+  Retains a specified number of old keys for reference or backup.
+- **Static Key Filename**:
+  Always writes the current key to a static filename for seamless application use.
+- **Log File Rotation**:
+  Prevents log file bloat by recycling logs when they reach a configured size.
+
+---
+
+## Requirements
+
+### Networking Requirements
+
+1. **KMIP Server Connectivity**:
+   - Ensure the container or host running the client has network access to the KMIP server.
+   - The default port for KMIP is **5696** (can be customized via `config.ini`).
+
+2. **Firewall Rules**:
+   - Allow outbound traffic from the client to the KMIP server on the specified port.
+   - Ensure the KMIP server can respond to incoming requests from the client.
+
+3. **TLS/SSL**:
+   - TLS/SSL is required for secure communication with the KMIP server.
+   - Certificates and keys are needed for mutual TLS authentication.
+
+4. **DNS or IP**:
+   - The KMIP server hostname or IP address must be resolvable and reachable.
+
+### System Requirements
+
+1. **Operating System**:
+   - The client is designed to run in a Docker container, but it can also be executed directly on Linux, macOS, or Windows systems with Python installed.
+
+2. **Python**:
+   - Python version **3.10** or higher is required if running locally.
+
+3. **Dependencies**:
+   - Install the required Python packages using `requirements.txt`:
+     ```bash
+     pip install -r requirements.txt
+     ```
+
+4. **Certificates**:
+   - The following certificates and keys are required for mutual TLS authentication:
+     - **Client Certificate (`client.crt`)**: Issued by the KMIP server's CA.
+     - **Client Key (`client.key`)**: Private key corresponding to the client certificate.
+     - **CA Certificate (`ca.pem`)**: The KMIP server's certificate authority certificate.
+
+5. **Disk Space**:
+   - Ensure there is sufficient disk space for:
+     - Logs in `/app/logs` (log rotation will manage size).
+     - Keys in `/app/output`.
+
+---
+
+## Configuration
+
+All configurations are managed via a `config.ini` file.
+
+### Example `config.ini`:
 
 ```ini
-# config.ini
 [KMIP]
-server_host = "your-kmip-server-host"
-server_port = "5696"
-cert_path = "/path/to/cert.pem"
-key_path = "/path/to/key.pem"
-ca_path = "/path/to/ca.pem"
+VAULT_KMIP_HOST=127.0.0.1
+VAULT_KMIP_PORT=5696
+CERT_PATH=/app/certs/client.crt
+KEY_PATH=/app/certs/client.key
+CA_PATH=/app/certs/ca.pem
 
-[OUTPUT]
-key_output_folder = "/app/output"
-metadata_file = "/app/output/key_metadata.txt"
-
-[ROTATION]
-rotation_interval_days = 90
+[GENERAL]
+KEY_STORAGE_PATH=/app/output
+STATIC_KEY_FILENAME=app-key.key
+ROTATION_PERIOD_HOURS=24
+KEEP_OLD_KEY=true
+KEEP_NUM_KEYS=5
+LOG_PATH=/app/logs/rotation.log
+LOG_FILE_RECYCLE_SIZE=1048576  # 1 MB in bytes
+WRITE_TO_LOG_FILE=true
+ENABLE_PERIODIC_ROTATION=true
 ```
 
-- **KMIP Section**:
-  - `server_host`: Hostname or IP of the KMIP server.
-  - `server_port`: Port for connecting to the KMIP server.
-  - `cert_path`, `key_path`, `ca_path`: Paths to the client certificate, client key, and CA certificate for KMIP authentication.
+### Configuration Parameters
 
-- **OUTPUT Section**:
-  - `key_output_folder`: Directory where keys will be saved.
-  - `metadata_file`: Path for saving metadata about generated keys.
+| Section       | Parameter                 | Description                                                                 |
+|---------------|---------------------------|-----------------------------------------------------------------------------|
+| **[KMIP]**    | `VAULT_KMIP_HOST`         | KMIP server hostname or IP address.                                        |
+|               | `VAULT_KMIP_PORT`         | KMIP server port (default is `5696`).                                      |
+|               | `CERT_PATH`               | Path to the client certificate for authentication.                         |
+|               | `KEY_PATH`                | Path to the client private key for authentication.                         |
+|               | `CA_PATH`                 | Path to the CA certificate for authentication.                             |
+| **[GENERAL]** | `KEY_STORAGE_PATH`        | Directory where keys are stored.                                           |
+|               | `STATIC_KEY_FILENAME`     | The name of the current key file (e.g., `app-key.key`).                    |
+|               | `ROTATION_PERIOD_HOURS`   | Interval in hours for periodic key rotation.                               |
+|               | `KEEP_OLD_KEY`            | If `true`, renames old keys with a timestamp.                              |
+|               | `KEEP_NUM_KEYS`           | Maximum number of old keys to retain.                                      |
+|               | `LOG_PATH`                | Path to the log file.                                                      |
+|               | `LOG_FILE_RECYCLE_SIZE`   | Maximum size of the log file in bytes before recycling.                    |
+|               | `WRITE_TO_LOG_FILE`       | If `true`, writes logs to a file in addition to `stdout`.                  |
+|               | `ENABLE_PERIODIC_ROTATION`| If `true`, enables periodic rotation. Otherwise, runs once and exits.      |
 
-- **ROTATION Section**:
-  - `rotation_interval_days`: Defines how often (in days) keys should be rotated.
+---
 
-## Dependency Installation: `requirements.txt`
-Create a `requirements.txt` file with the following content:
+## Running with Docker
 
-```plaintext
-# requirements.txt
-
-pymip==0.10.0
-configparser==5.3.0
-```
-
-## Optional: `setup.py` for Python Packaging
-Create a `setup.py` file to specify dependencies and the required Python version:
-
-```python
-# setup.py
-from setuptools import setup, find_packages
-
-setup(
-    name="kmip_client",
-    version="1.0",
-    packages=find_packages(),
-    install_requires=[
-        "pymip==0.10.0",
-        "configparser==5.3.0"
-    ],
-    python_requires=">=3.6",
-)
-```
-
-## Main Script: `rotate_kmip_key.py`
-Create the main script, `rotate_kmip_key.py`, to interact with the KMIP server and handle key rotation and file output.
-
-```python
-# rotate_kmip_key.py
-import configparser
-import datetime
-from pathlib import Path
-from kmip.pie import client
-
-def load_config():
-    config = configparser.ConfigParser()
-    config.read('/app/config.ini')
-    return config
-
-def get_kmip_key(kmip_client, key_id):
-    return kmip_client.get(key_id)
-
-def write_key_to_disk(key, output_folder, metadata_file):
-    output_folder = Path(output_folder)
-    output_folder.mkdir(parents=True, exist_ok=True)
-    key_path = output_folder / f"key_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.key"
-
-    with open(key_path, 'wb') as f:
-        f.write(key)
-    
-    with open(metadata_file, 'a') as meta:
-        meta.write(f"{datetime.datetime.now()}: Key {key_path.name} stored\n")
-
-def rotate_key_if_needed(config, kmip_client):
-    last_rotation = config.get('ROTATION', 'last_rotation', fallback=None)
-    rotation_interval_days = int(config['ROTATION']['rotation_interval_days'])
-
-    if last_rotation:
-        last_rotation_date = datetime.datetime.strptime(last_rotation, '%Y-%m-%d')
-        if (datetime.datetime.now() - last_rotation_date).days < rotation_interval_days:
-            return False
-    
-    key_id = config['KMIP'].get('key_id')
-    key = get_kmip_key(kmip_client, key_id)
-    write_key_to_disk(key, config['OUTPUT']['key_output_folder'], config['OUTPUT']['metadata_file'])
-    
-    config['ROTATION']['last_rotation'] = datetime.datetime.now().strftime('%Y-%m-%d')
-    with open('/app/config.ini', 'w') as configfile:
-        config.write(configfile)
-    return True
-
-def main():
-    config = load_config()
-    kmip_client = client.ProxyKmipClient(
-        hostname=config['KMIP']['server_host'],
-        port=int(config['KMIP']['server_port']),
-        cert=config['KMIP']['cert_path'],
-        key=config['KMIP']['key_path'],
-        ca=config['KMIP']['ca_path']
-    )
-    with kmip_client:
-        rotated = rotate_key_if_needed(config, kmip_client)
-        if rotated:
-            print("Key rotated and stored successfully.")
-        else:
-            print("Rotation not needed yet.")
-
-if __name__ == "__main__":
-    main()
-```
-
-## Dockerfile
-Create a `Dockerfile` to define the Docker image:
-
-```Dockerfile
-# Dockerfile
-FROM python:3.8-slim
-
-# Set working directory
-WORKDIR /app
-
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the rest of the application files
-COPY . .
-
-# Environment variable for config file path
-ENV CONFIG_FILE_PATH="/app/config.ini"
-
-# Define entrypoint to run the script with the configuration file
-ENTRYPOINT ["python", "rotate_kmip_key.py"]
-```
-
-## Building and Running the Docker Container
-
-### Step 1: Build the Docker Image
-Run the following command from the `kmip_client` directory:
+### 1. Build the Docker Image
 
 ```bash
-docker build -t kmip-client .
+docker build -t kmip-client-rotation .
 ```
 
-### Step 2: Run the Docker Container
-To run the client, you need to:
-- Mount the `config.ini` file to provide configuration details.
-- Mount an output directory for storing keys and metadata generated by the client.
+### 2. Running as a Periodic Job
+
+To set up periodic key rotation:
+
+```bash
+docker run -d \
+    --name kmip-rotation-job \
+    -v /path/to/certs:/app/certs \
+    -v /path/to/output:/app/output \
+    -v /path/to/logs:/app/logs \
+    -v /path/to/config.ini:/app/config.ini \
+    kmip-client-rotation
+```
+
+### 3. Running for Manual Key Creation
+
+To create a key manually:
 
 ```bash
 docker run --rm \
-  -v $(pwd)/config.ini:/app/config.ini \
-  -v $(pwd)/output:/app/output \
-  kmip-client
+    -v /path/to/certs:/app/certs \
+    -v /path/to/output:/app/output \
+    -v /path/to/logs:/app/logs \
+    -v /path/to/config.ini:/app/config.ini \
+    kmip-client-rotation python ts-kmip-client.py
 ```
 
-- **config.ini**: This file should be mounted as `/app/config.ini` inside the container.
-- **Output Directory**: The `/app/output` directory will store output files. You may customize paths in the `config.ini` to ensure output files are saved in the mounted `output` folder.
+---
 
-## Example Usage
-The client script:
-1. Connects to the KMIP server using the provided credentials.
-2. Retrieves the current KMIP key.
-3. Saves the key to the specified output directory.
-4. Manages key rotation based on the defined interval.
+## Logs
 
-This setup is ideal for applications like database encryption at rest, where KMIP key rotation is triggered by the client.
+### Viewing Logs in Docker
 
-## Additional Notes
-For local development and testing:
-- Ensure Python 3.8+ is installed.
-- Install dependencies using `requirements.txt`.
+Use the following command to view logs in real-time:
+
+```bash
+docker logs kmip-rotation-job
+```
+
+### Log Rotation
+
+Logs are automatically recycled when they exceed the size specified in `LOG_FILE_RECYCLE_SIZE`. Up to 5 backup log files are retained.
+
+---
+
+## Key Management
+
+### Directory Structure
+
+After running the container, the output directory (`/app/output` by default) will contain:
+
+- **Latest Key**:
+  - File: `app-key.key`
+  - Contains the current key material.
+
+- **Old Keys** (if `KEEP_OLD_KEY=true`):
+  - Files: `app-key.key.<timestamp>` (e.g., `app-key.key.20241117120000`).
+  - Number of old keys retained is determined by `KEEP_NUM_KEYS`.
+
+---
+
+## Customization
+
+### Change Key Rotation Interval
+
+Modify the `ROTATION_PERIOD_HOURS` parameter in `config.ini` to change the interval for periodic rotation.
+
+### Limit Old Keys
+
+Set `KEEP_NUM_KEYS` in `config.ini` to control how many old keys are retained.
+
+### Control Log File Size
+
+Adjust `LOG_FILE_RECYCLE_SIZE` in `config.ini` to set the maximum size of the log file in bytes before recycling.
+
+---
+
+## Stopping the Periodic Job
+
+To stop the periodic job:
+
+```bash
+docker stop kmip-rotation-job
+docker rm kmip-rotation-job
+```
+
+---
+
+## Development and Testing
+
+### Running Locally with Python
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Run the script:
+   ```bash
+   python ts-kmip-client.py
+   ```
+
+### Running in VSCode
+
+Use the provided `.vscode/launch.json` to debug and test the script in VSCode.
+
+---
+
+## Contributing
+
+Feel free to fork this repository and submit pull requests. For major changes, please open an issue to discuss your ideas.
+
+---
 
 ## License
-This project is licensed under the MIT License.
-```
 
-This `README.md` file provides complete documentation, including setup, configuration, Docker build instructions, and usage details.
+This project is licensed under the MIT License. See `LICENSE` for details.
+
+---
+
+## Author
+
+This project was developed to simplify cryptographic key management for applications requiring seamless key updates and rotation.
+
+---
+
+This comprehensive `README.md` file includes system, networking, and configuration requirements to ensure proper setup and operation.

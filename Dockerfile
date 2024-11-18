@@ -1,18 +1,26 @@
-# Use an official Python image as a base
-FROM python:3.8-slim
+# Use a lightweight Python base image
+FROM python:3.10-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create directories for certificates, key output, logs, and config
+RUN mkdir -p /app/certs /app/output /app/logs
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
+# Copy the Python script, requirements file, and config file
+COPY requirements.txt /app/
+COPY ts-kmip-client.py /app/
+COPY config.ini /app/
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application files
-COPY . .
+# Expose directories as volumes
+VOLUME ["/app/certs", "/app/output", "/app/logs", "/app/config"]
 
-# Environment variable for config file path
-ENV CONFIG_FILE_PATH="/app/config.ini"
-
-# Define entrypoint to run the script with the configuration file
-ENTRYPOINT ["python", "kmipClient.py"]
+# Default command to run the Python script
+CMD ["python", "ts-kmip-client.py"]
