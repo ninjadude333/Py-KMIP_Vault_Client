@@ -251,3 +251,176 @@ This project was developed to simplify cryptographic key management for applicat
 ---
 
 This comprehensive `README.md` file includes system, networking, and configuration requirements to ensure proper setup and operation.
+
+
+To convert the raw key bytes to a standard PEM format, you can use the `cryptography` library in Python. This will encode the keys with the necessary headers and Base64-encoded content.
+
+Below is the enhanced example that converts the raw keys to PEM format and writes them to files:
+
+---
+
+### Enhanced Example: Convert and Write Keys in PEM Format
+
+```python
+import os
+from kmip.pie.client import ProxyKmipClient
+from kmip.core import enums
+from cryptography.hazmat.primitives import serialization
+
+# Configuration for KMIP connection
+kmip_config = {
+    'hostname': '127.0.0.1',  # Replace with your KMIP server address
+    'port': 5696,             # Replace with your KMIP server port
+    'use_tls': True,
+    'tls_client_certificate_path': 'path/to/client.pem',
+    'tls_client_key_path': 'path/to/key.pem',
+    'tls_ca_certificate_path': 'path/to/ca.pem',
+    'validate_tls': True
+}
+
+output_dir = "keys"  # Directory where the key files will be saved
+
+
+def write_pem_key(key_bytes, filename, key_type="public"):
+    """Convert raw key bytes to PEM format and write to file."""
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+        file_path = os.path.join(output_dir, filename)
+
+        if key_type == "public":
+            pem_key = serialization.load_der_public_key(key_bytes).public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            )
+        elif key_type == "private":
+            pem_key = serialization.load_der_private_key(
+                key_bytes,
+                password=None
+            ).private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+        else:
+            raise ValueError(f"Invalid key_type: {key_type}")
+
+        with open(file_path, "wb") as key_file:
+            key_file.write(pem_key)
+
+        print(f"{key_type.capitalize()} key written to: {file_path}")
+    except Exception as e:
+        print(f"Failed to write {key_type} key to file {filename}: {e}")
+
+
+def create_key_pair_example():
+    """Create an asymmetric key pair using KMIP and write to PEM files."""
+    try:
+        # Initialize KMIP client
+        client = ProxyKmipClient(
+            hostname=kmip_config["hostname"],
+            port=kmip_config["port"],
+            use_tls=kmip_config["use_tls"],
+            tls_client_certificate_path=kmip_config["tls_client_certificate_path"],
+            tls_client_key_path=kmip_config["tls_client_key_path"],
+            tls_ca_certificate_path=kmip_config["tls_ca_certificate_path"],
+            validate_tls=kmip_config["validate_tls"]
+        )
+
+        client.open()
+        print("Connected to KMIP server.")
+
+        # Create RSA key pair
+        public_key_id, private_key_id = client.create_key_pair(
+            algorithm=enums.CryptographicAlgorithm.RSA,
+            length=2048,  # Key length in bits
+            public_usage_mask=[
+                enums.CryptographicUsageMask.ENCRYPT,
+                enums.CryptographicUsageMask.VERIFY
+            ],
+            private_usage_mask=[
+                enums.CryptographicUsageMask.DECRYPT,
+                enums.CryptographicUsageMask.SIGN
+            ]
+        )
+
+        print(f"Public key ID: {public_key_id}")
+        print(f"Private key ID: {private_key_id}")
+
+        # Retrieve keys
+        public_key = client.get(public_key_id)
+        private_key = client.get(private_key_id)
+
+        # Write keys to PEM files
+        if public_key and private_key:
+            write_pem_key(public_key.value, "public_key.pem", key_type="public")
+            write_pem_key(private_key.value, "private_key.pem", key_type="private")
+        else:
+            print("Failed to retrieve keys from KMIP server.")
+
+        client.close()
+        print("Disconnected from KMIP server.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+
+# Run the example
+create_key_pair_example()
+```
+
+---
+
+### Key Updates:
+
+1. **Convert Keys to PEM Format**:
+   - For **public keys**:
+     - `serialization.load_der_public_key` converts the raw DER format to a public key object.
+     - `.public_bytes` encodes it in PEM format with `SubjectPublicKeyInfo`.
+   - For **private keys**:
+     - `serialization.load_der_private_key` converts the raw DER format to a private key object.
+     - `.private_bytes` encodes it in PEM format with PKCS8.
+
+2. **Write Keys to Files**:
+   - Keys are saved in the `keys` directory as `public_key.pem` and `private_key.pem`.
+
+---
+
+### Installing `cryptography`
+You need the `cryptography` library to run this script. Install it with:
+
+```bash
+pip install cryptography
+```
+
+---
+
+### Example Output Files:
+#### **`public_key.pem`**:
+```plaintext
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr7zz3/HFjYozZ2Z/kM9u
+...
+-----END PUBLIC KEY-----
+```
+
+#### **`private_key.pem`**:
+```plaintext
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCur7zz3/HFjYoz
+...
+-----END PRIVATE KEY-----
+```
+
+---
+
+### Notes:
+- Use `openssl` to validate the keys:
+  - **Check the public key**:
+    ```bash
+    openssl rsa -pubin -in keys/public_key.pem -text -noout
+    ```
+  - **Check the private key**:
+    ```bash
+    openssl rsa -in keys/private_key.pem -check -noout
+    ```
+
+- Adjust key formats (e.g., PKCS1) if needed by changing the parameters in `.public_bytes` or `.private_bytes`.

@@ -8,6 +8,7 @@ from kmip.pie.client import ProxyKmipClient
 from kmip.core import enums
 import configparser
 from cryptography.hazmat.primitives import serialization
+import base64
 
 # Global Variables for Configuration
 CONFIG = {}
@@ -50,6 +51,15 @@ def setup_logging():
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=handlers
     )
+
+def serialize_symmetric_key(key_bytes, algorithm="AES"):
+    """Serialize symmetric key to a Base64-encoded format."""
+    header = f"-----BEGIN {algorithm} KEY-----\n"
+    footer = f"\n-----END {algorithm} KEY-----"
+    # Encode the key in Base64 and wrap lines at 64 characters
+    key_b64 = base64.encodebytes(key_bytes).decode("utf-8")
+    key_wrapped = "\n".join(key_b64[i:i+64] for i in range(0, len(key_b64), 64))
+    return f"{header}{key_wrapped}{footer}"
 
 def write_key_to_file(key_bytes, key_storage_path, key_filename, mode="wb"):
             """Write the key to a local file with optional renaming for old keys."""
@@ -137,9 +147,14 @@ def test_kmip_login():
         # Step 2: Retrieve the newly created key
         logging.info(f"Retrieving new key with ID: {new_key_id}...")
         new_key = client.get(new_key_id)
-        # Step 3: Write the new key to a static file
+
+        # Step 3: serialize key
+        logging.info(f"Serializing new key")
+        serialized_key = serialize_symmetric_key(new_key.value)
+
+        # Step 4: Write the new key to a static file
         logging.info(f"Writing new key to static file: ...")
-        write_key_to_file(new_key.value, '/app/output', 'app-key.key')
+        write_key_to_file(serialized_key, '/app/output', 'app-key.key', mode="w")
         logging.info(f"Key rotation completed successfully at {datetime.now()}.")
 
         # generate key/pair
